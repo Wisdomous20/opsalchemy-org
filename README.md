@@ -1,36 +1,59 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# OPSAlchemy
 
-## Getting Started
+OPSAlchemy is a Next.js application for a conversion-focused marketing website, grounded AI assistant, browser voice experience, managed business knowledge, and future GoHighLevel integration.
 
-First, run the development server:
+## Requirements
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- Node.js 20 or later
+- npm
+- An OpenAI project key and vector store for AI phases
+
+## Local Setup
+
+1. Install dependencies:
+
+   ```powershell
+   npm install
+   ```
+
+2. Copy `.env.example` to `.env.local` and replace placeholders with local secrets. Do not commit local environment files.
+
+3. Start the development server:
+
+   ```powershell
+   npm run dev
+   ```
+
+4. Open `http://localhost:3000`.
+
+## Quality Commands
+
+```powershell
+npm run lint
+npm run typecheck
+npm run format:check
+npm run test:ci
+npm run build
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Run all non-build quality checks with:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```powershell
+npm run check
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Architecture
 
-## Learn More
+The application uses clean dependency boundaries:
 
-To learn more about Next.js, take a look at the following resources:
+- `src/domain`: OPSAlchemy business concepts and rules
+- `src/application`: use cases and provider-neutral ports
+- `src/infrastructure`: external-service adapters added by delivery phase
+- `src/app` and `src/components`: Next.js presentation
+- `src/server`: server-only configuration and dependency composition
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+See [Architecture](docs/architecture.md), [Product Scope](docs/product-scope.md), [Security and Privacy Baseline](docs/security-privacy-baseline.md), and the [Development Roadmap](docs/development-roadmap.md).
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Knowledge
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Approved public knowledge prepared for OpenAI File Search is stored in `knowledge/`. Public and internal knowledge must remain separate.
