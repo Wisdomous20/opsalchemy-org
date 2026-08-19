@@ -1,4 +1,6 @@
 import { AlchemyOrbit } from "@/components/marketing/alchemy-orbit";
+import { ChatAssistant } from "@/components/assistant/chat-assistant";
+import { AssistantTrigger } from "@/components/assistant/assistant-trigger";
 import { SiteFooter } from "@/components/marketing/site-footer";
 import { SiteHeader } from "@/components/marketing/site-header";
 import {
@@ -9,9 +11,6 @@ import {
   OPERATING_PILLARS,
   TEAM,
 } from "@/content/marketing";
-
-const CONSULTATION_LINK =
-  "mailto:rhiannon@opsalchemy.org?subject=OPSAlchemy%20consultation";
 
 export default function Home() {
   return (
@@ -31,9 +30,9 @@ export default function Home() {
               depending on heroic effort.
             </p>
             <div className="hero__actions">
-              <a className="button button--brass" href={CONSULTATION_LINK}>
+              <AssistantTrigger className="button button--brass">
                 Begin the transformation <span aria-hidden="true">↗</span>
-              </a>
+              </AssistantTrigger>
               <a className="text-link text-link--light" href="#services">
                 Explore our services <span aria-hidden="true">↓</span>
               </a>
@@ -238,9 +237,9 @@ export default function Home() {
               Tell us what feels heavier than it should. We will help you find the
               system underneath it.
             </p>
-            <a className="button button--dark" href={CONSULTATION_LINK}>
+            <AssistantTrigger className="button button--dark">
               Start a conversation <span aria-hidden="true">↗</span>
-            </a>
+            </AssistantTrigger>
           </div>
           <aside>
             <p className="eyebrow">Occasional field notes</p>
@@ -257,6 +256,7 @@ export default function Home() {
       </section>
 
       <SiteFooter />
+      <ChatAssistant />
     </main>
   );
 }

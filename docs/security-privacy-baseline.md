@@ -33,6 +33,9 @@
 ## Integrations
 
 - Keep OpenAI and GHL calls server-side.
+- Browser voice may connect directly to OpenAI over WebRTC only with a short-lived
+  client secret minted by the server; permanent project credentials must never enter
+  the browser bundle or API response.
 - Give service accounts the least permissions required.
 - Apply bounded timeouts and retries.
 - Make webhook and CRM side effects idempotent.

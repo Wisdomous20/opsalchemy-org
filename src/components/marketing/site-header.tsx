@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { AssistantTrigger } from "@/components/assistant/assistant-trigger";
 import { BrandMark } from "./brand-mark";
+import { HomeLink } from "./home-link";
 
 const NAVIGATION = [
   { href: "#services", label: "Services" },
@@ -20,20 +22,17 @@ export function SiteHeader() {
   return (
     <header className="site-header">
       <div className="shell site-header__inner">
-        <Link href="/" aria-label="OPSAlchemy home">
+        <HomeLink>
           <BrandMark compact />
-        </Link>
+        </HomeLink>
 
         <nav className="site-header__nav" aria-label="Primary navigation">
           <NavigationLinks />
         </nav>
 
-        <a
-          className="button button--small button--outline-light site-header__cta"
-          href="mailto:rhiannon@opsalchemy.org?subject=OPSAlchemy%20consultation"
-        >
+        <AssistantTrigger className="button button--small button--outline-light site-header__cta">
           Start a conversation
-        </a>
+        </AssistantTrigger>
 
         <details className="mobile-menu">
           <summary aria-label="Open navigation">
@@ -42,9 +41,7 @@ export function SiteHeader() {
           </summary>
           <nav aria-label="Mobile navigation">
             <NavigationLinks />
-            <a href="mailto:rhiannon@opsalchemy.org?subject=OPSAlchemy%20consultation">
-              Start a conversation
-            </a>
+            <AssistantTrigger>Start a conversation</AssistantTrigger>
           </nav>
         </details>
       </div>

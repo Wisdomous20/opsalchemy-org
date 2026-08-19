@@ -57,3 +57,13 @@ See [Architecture](docs/architecture.md), [Product Scope](docs/product-scope.md)
 ## Knowledge
 
 Approved public knowledge prepared for OpenAI File Search is stored in `knowledge/`. Public and internal knowledge must remain separate.
+
+## Assistant Interfaces
+
+- Text chat uses the server-side Responses API adapter and approved vector-store search.
+- Browser voice uses WebRTC with a short-lived OpenAI Realtime client secret minted by
+  `/api/realtime/session`.
+- Voice knowledge calls pass through `/api/realtime/tool` and reuse the same grounded
+  application use case as text chat.
+- The permanent OpenAI project key remains server-only. Voice sessions release the
+  microphone and peer connection when ended or disconnected.

@@ -1,14 +1,15 @@
 import Link from "next/link";
 import { BrandMark } from "./brand-mark";
+import { HomeLink } from "./home-link";
 
 export function SiteFooter() {
   return (
     <footer className="site-footer">
       <div className="shell site-footer__grid">
         <div>
-          <Link href="/" aria-label="OPSAlchemy home">
+          <HomeLink>
             <BrandMark />
-          </Link>
+          </HomeLink>
         </div>
         <div className="site-footer__contact">
           <p className="eyebrow">New business</p>

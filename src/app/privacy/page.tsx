@@ -33,6 +33,25 @@ export default function PrivacyPage() {
           to deliver and protect the site, such as IP address, browser type, and request
           logs.
         </p>
+        <h2>Assistant conversations</h2>
+        <p>
+          If you use the OPSAlchemy website assistant, your messages and a limited
+          recent conversation history are sent to OpenAI to generate an answer and
+          search the approved OPSAlchemy knowledge base. The integration requests that
+          OpenAI not store generated response state. A copy of your conversation is
+          saved in your browser so you can continue it later; you can remove that copy
+          by starting a new conversation or clearing this site’s browser data. Please do
+          not submit confidential, financial, health, or other sensitive information
+          through the assistant.
+        </p>
+        <p>
+          If you start a voice conversation, your browser asks for microphone access.
+          While the session is active, microphone audio is sent directly to OpenAI over
+          an encrypted real-time connection so the assistant can understand and reply
+          with speech. A live transcript is displayed during the session but is not
+          added to the saved text-chat history. Ending voice stops the microphone tracks
+          and closes the connection.
+        </p>
         <h2>Sharing and retention</h2>
         <p>
           OPSAlchemy does not sell your personal information. Information may be shared
