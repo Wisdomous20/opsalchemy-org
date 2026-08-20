@@ -1,0 +1,34 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Lead {
+  id                  String                @id @default(uuid()) @db.Uuid
+  name                String                @db.VarChar(120)
+  email               String                @unique @db.VarChar(320)
+  phone               String?               @db.VarChar(32)
+  conversationSummary String                @map("conversation_summary") @db.Text
+  crmSyncAllowed      Boolean               @map("crm_sync_allowed")
+  consentRecordedAt   DateTime              @map("consent_recorded_at") @db.Timestamptz(3)
+  createdAt           DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
+  serviceInterests    LeadServiceInterest[]
+
+  @@map("leads")
+}
+
+model LeadServiceInterest {
+  leadId    String   @map("lead_id") @db.Uuid
+  serviceId String   @map("service_id") @db.VarChar(64)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@id([leadId, serviceId])
+  @@index([serviceId])
+  @@map("lead_service_interests")
+}

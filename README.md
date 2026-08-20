@@ -67,3 +67,26 @@ Approved public knowledge prepared for OpenAI File Search is stored in `knowledg
   application use case as text chat.
 - The permanent OpenAI project key remains server-only. Voice sessions release the
   microphone and peer connection when ended or disconnected.
+
+## Personal Google Calendar Scheduling
+
+The text and voice assistants can schedule consultations on one personal Google
+Calendar. They collect the visitor's name, email, exact time, and time zone, require
+explicit confirmation, check free/busy, and then create a Google Meet event. Google
+Calendar sends the attendee invitation as the confirmation email.
+
+To enable scheduling:
+
+1. Enable the Google Calendar API in a Google Cloud project and configure its OAuth
+   consent screen for the calendar owner's Google account.
+2. Create an OAuth web client and authorize that account with offline access and these
+   scopes:
+   - `https://www.googleapis.com/auth/calendar.events`
+   - `https://www.googleapis.com/auth/calendar.freebusy`
+3. Put the resulting client ID, client secret, and refresh token in `.env.local` using
+   the `GOOGLE_*` names from `.env.example`. Keep `GOOGLE_CALENDAR_ID=primary` to use
+   the authorized account's primary calendar.
+
+Never commit the OAuth client secret or refresh token. If the OAuth consent screen is
+left in Google Cloud's testing status, Google may issue a short-lived refresh token;
+use the appropriate production consent configuration before deployment.

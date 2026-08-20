@@ -36,4 +36,15 @@ describe("parseServerEnv", () => {
       expect(String(error)).not.toContain(exposedSecret);
     }
   });
+
+  it("requires the complete Google Calendar OAuth configuration when enabled", () => {
+    expect(() =>
+      parseServerEnv({
+        ...validEnvironment,
+        GOOGLE_OAUTH_CLIENT_ID: "client-id",
+      }),
+    ).toThrowError(
+      "Invalid server configuration: GOOGLE_OAUTH_CLIENT_SECRET, GOOGLE_OAUTH_REFRESH_TOKEN, GOOGLE_CALENDAR_ID",
+    );
+  });
 });

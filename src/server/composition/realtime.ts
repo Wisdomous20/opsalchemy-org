@@ -14,6 +14,12 @@ export function getCreateRealtimeSession(): CreateRealtimeSession {
     new OpenAIRealtimeSessionGateway({
       apiKey: environment.OPENAI_API_KEY,
       model: environment.OPENAI_REALTIME_MODEL,
+      schedulingEnabled: Boolean(
+        environment.GOOGLE_OAUTH_CLIENT_ID &&
+        environment.GOOGLE_OAUTH_CLIENT_SECRET &&
+        environment.GOOGLE_OAUTH_REFRESH_TOKEN &&
+        environment.GOOGLE_CALENDAR_ID,
+      ),
     }),
   );
   return useCase;

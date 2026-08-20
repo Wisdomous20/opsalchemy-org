@@ -63,6 +63,20 @@ function parseToolQuery(argumentsJson: string | undefined): string | null {
   }
 }
 
+function parseScheduleToolArguments(
+  argumentsJson: string | undefined,
+): Record<string, unknown> | null {
+  if (!argumentsJson) return null;
+  try {
+    const value: unknown = JSON.parse(argumentsJson);
+    return value && typeof value === "object"
+      ? (value as Record<string, unknown>)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 export function VoiceAssistant({
   conversationId,
   onTextFallback,
@@ -78,6 +92,24 @@ export function VoiceAssistant({
   const handledCallsRef = useRef(new Set<string>());
   const transcriptRef = useRef<VoiceTurn[]>([]);
   const startAttemptRef = useRef(0);
+  const playbackDrainTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function clearPlaybackDrainTimer() {
+    if (playbackDrainTimerRef.current) {
+      clearTimeout(playbackDrainTimerRef.current);
+      playbackDrainTimerRef.current = null;
+    }
+  }
+
+  function markPlaybackDraining() {
+    clearPlaybackDrainTimer();
+    // response.done describes generation, not the WebRTC playout buffer. Keep
+    // the UI in its speaking state briefly while the final buffered audio drains.
+    playbackDrainTimerRef.current = setTimeout(() => {
+      playbackDrainTimerRef.current = null;
+      setStatus((current) => (current === "speaking" ? "listening" : current));
+    }, 1_200);
+  }
 
   function updateTranscript(updater: (turns: VoiceTurn[]) => VoiceTurn[]) {
     setTranscript((current) => {
@@ -88,6 +120,7 @@ export function VoiceAssistant({
   }
 
   function stopResources() {
+    clearPlaybackDrainTimer();
     channelRef.current?.close();
     peerRef.current?.close();
     streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -108,7 +141,11 @@ export function VoiceAssistant({
   useEffect(
     () => () => {
       startAttemptRef.current += 1;
-      stopResources();
+      if (playbackDrainTimerRef.current) clearTimeout(playbackDrainTimerRef.current);
+      channelRef.current?.close();
+      peerRef.current?.close();
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+      if (audioRef.current) audioRef.current.srcObject = null;
     },
     [],
   );
@@ -181,6 +218,70 @@ export function VoiceAssistant({
     }
   }
 
+  async function runSchedulingTool(
+    channel: RTCDataChannel,
+    callId: string,
+    argumentsJson: string | undefined,
+  ) {
+    if (handledCallsRef.current.has(callId)) return;
+    handledCallsRef.current.add(callId);
+    const details = parseScheduleToolArguments(argumentsJson);
+
+    try {
+      if (!details) throw new Error("invalid_tool_arguments");
+      setStatus("thinking");
+      const response = await fetch("/api/realtime/schedule", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conversationId, callId, ...details }),
+      });
+      const payload: unknown = await response.json();
+      if (!response.ok || !payload || typeof payload !== "object") {
+        throw new Error("scheduling_unavailable");
+      }
+
+      channel.send(
+        JSON.stringify({
+          type: "conversation.item.create",
+          item: {
+            type: "function_call_output",
+            call_id: callId,
+            output: JSON.stringify(payload),
+          },
+        }),
+      );
+      channel.send(JSON.stringify({ type: "response.create" }));
+    } catch {
+      if (channel.readyState === "open") {
+        channel.send(
+          JSON.stringify({
+            type: "conversation.item.create",
+            item: {
+              type: "function_call_output",
+              call_id: callId,
+              output: JSON.stringify({ status: "unavailable" }),
+            },
+          }),
+        );
+        channel.send(JSON.stringify({ type: "response.create" }));
+      }
+    }
+  }
+
+  function runRealtimeTool(
+    channel: RTCDataChannel,
+    name: string | undefined,
+    callId: string | undefined,
+    argumentsJson: string | undefined,
+  ) {
+    if (!callId) return;
+    if (name === "search_opsalchemy_knowledge") {
+      void runKnowledgeTool(channel, callId, argumentsJson);
+    } else if (name === "schedule_consultation") {
+      void runSchedulingTool(channel, callId, argumentsJson);
+    }
+  }
+
   function handleRealtimeEvent(channel: RTCDataChannel, event: RealtimeEvent) {
     switch (event.type) {
       case "session.created":
@@ -188,6 +289,7 @@ export function VoiceAssistant({
         setStatus("listening");
         break;
       case "input_audio_buffer.speech_started":
+        clearPlaybackDrainTimer();
         setStatus("listening");
         break;
       case "input_audio_buffer.speech_stopped":
@@ -205,6 +307,7 @@ export function VoiceAssistant({
       }
       case "response.output_audio_transcript.delta": {
         if (!event.delta) break;
+        clearPlaybackDrainTimer();
         setStatus("speaking");
         const id = event.item_id ?? "active-assistant-response";
         updateTranscript((turns) => {
@@ -233,22 +336,21 @@ export function VoiceAssistant({
         break;
       }
       case "response.function_call_arguments.done":
-        if (event.name === "search_opsalchemy_knowledge" && event.call_id)
-          void runKnowledgeTool(channel, event.call_id, event.arguments);
+        runRealtimeTool(channel, event.name, event.call_id, event.arguments);
         break;
       case "response.done": {
         const functionCalls =
           event.response?.output?.filter(
             (item) =>
               item.type === "function_call" &&
-              item.name === "search_opsalchemy_knowledge" &&
+              (item.name === "search_opsalchemy_knowledge" ||
+                item.name === "schedule_consultation") &&
               item.call_id,
           ) ?? [];
         functionCalls.forEach((item) => {
-          if (item.call_id)
-            void runKnowledgeTool(channel, item.call_id, item.arguments);
+          runRealtimeTool(channel, item.name, item.call_id, item.arguments);
         });
-        if (functionCalls.length === 0) setStatus("listening");
+        if (functionCalls.length === 0) markPlaybackDraining();
         break;
       }
       case "error":

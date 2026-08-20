@@ -14,6 +14,9 @@ interface RateLimitResult {
 const WINDOW_MS = 60_000;
 const MAX_REQUESTS = 10;
 const entries = new Map<string, RateLimitEntry>();
+const SCHEDULING_WINDOW_MS = 60 * 60_000;
+const MAX_SCHEDULING_REQUESTS = 3;
+const schedulingEntries = new Map<string, RateLimitEntry>();
 
 function anonymize(identifier: string): string {
   return createHash("sha256").update(identifier).digest("hex").slice(0, 24);
@@ -52,6 +55,41 @@ export function consumeAssistantRateLimit(
   };
 }
 
+export function consumeSchedulingRateLimit(
+  identifier: string,
+  now = Date.now(),
+): RateLimitResult {
+  const existing = schedulingEntries.get(identifier);
+
+  if (!existing || existing.resetAt <= now) {
+    schedulingEntries.set(identifier, {
+      count: 1,
+      resetAt: now + SCHEDULING_WINDOW_MS,
+    });
+    return {
+      allowed: true,
+      remaining: MAX_SCHEDULING_REQUESTS - 1,
+      retryAfterSeconds: 0,
+    };
+  }
+
+  if (existing.count >= MAX_SCHEDULING_REQUESTS) {
+    return {
+      allowed: false,
+      remaining: 0,
+      retryAfterSeconds: Math.max(1, Math.ceil((existing.resetAt - now) / 1_000)),
+    };
+  }
+
+  existing.count += 1;
+  return {
+    allowed: true,
+    remaining: MAX_SCHEDULING_REQUESTS - existing.count,
+    retryAfterSeconds: 0,
+  };
+}
+
 export function resetAssistantRateLimitsForTests(): void {
   entries.clear();
+  schedulingEntries.clear();
 }
