@@ -1,7 +1,12 @@
 "use client";
 
-import { FormEvent, useEffect, useRef, useState } from "react";
-import { VoiceAssistant } from "./voice-assistant";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import {
+  VoiceAssistant,
+  type VoiceAssistantHandle,
+  type VoiceStatus,
+  type VoiceTurn,
+} from "./voice-assistant";
 
 interface Citation {
   readonly sourceId: string;
@@ -9,10 +14,7 @@ interface Citation {
   readonly excerpt: string;
 }
 
-interface ChatMessage {
-  readonly id: string;
-  readonly role: "user" | "assistant";
-  readonly content: string;
+interface ChatMessage extends VoiceTurn {
   readonly citations?: readonly Citation[];
 }
 
@@ -60,9 +62,26 @@ export function ChatAssistant() {
   const [conversation, setConversation] = useState<StoredConversation | null>(null);
   const [draft, setDraft] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const [voiceStatus, setVoiceStatus] = useState<VoiceStatus>("idle");
   const [error, setError] = useState<string | null>(null);
   const transcriptRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const voiceRef = useRef<VoiceAssistantHandle>(null);
+
+  const handleVoiceTurn = useCallback((turn: VoiceTurn) => {
+    setConversation((current) => {
+      if (!current) return current;
+      const existing = current.messages.some((message) => message.id === turn.id);
+      return {
+        ...current,
+        messages: existing
+          ? current.messages.map((message) =>
+              message.id === turn.id ? { ...message, ...turn } : message,
+            )
+          : [...current.messages, turn],
+      };
+    });
+  }, []);
 
   useEffect(() => {
     const initialize = window.setTimeout(() => {
@@ -136,6 +155,17 @@ export function ChatAssistant() {
     };
     const previousMessages = conversation.messages;
 
+    const voiceResult = voiceRef.current?.sendText(userMessage) ?? "disconnected";
+    if (voiceResult === "sent") {
+      setDraft("");
+      setError(null);
+      return;
+    }
+    if (voiceResult === "busy") {
+      setError("Please wait for the guide to finish, then send your message.");
+      return;
+    }
+
     setConversation({ ...conversation, messages: [...previousMessages, userMessage] });
     setDraft("");
     setError(null);
@@ -207,6 +237,9 @@ export function ChatAssistant() {
     setError(null);
   }
 
+  const isVoiceBusy = ["connecting", "thinking", "speaking"].includes(voiceStatus);
+  const isVoiceConnected = ["listening", "thinking", "speaking"].includes(voiceStatus);
+
   return (
     <div className={`chat-assistant ${isOpen ? "chat-assistant--open" : ""}`}>
       {isOpen && (
@@ -242,13 +275,6 @@ export function ChatAssistant() {
           </header>
 
           <div className="chat-transcript" ref={transcriptRef} aria-live="polite">
-            {conversation && (
-              <VoiceAssistant
-                conversationId={conversation.conversationId}
-                onTextFallback={() => inputRef.current?.focus()}
-              />
-            )}
-
             {conversation?.messages.map((message) => (
               <article
                 className={`chat-message chat-message--${message.role}`}
@@ -299,6 +325,20 @@ export function ChatAssistant() {
               </div>
             )}
 
+            {conversation && (
+              <VoiceAssistant
+                key={conversation.conversationId}
+                conversationId={conversation.conversationId}
+                controllerRef={voiceRef}
+                history={conversation.messages
+                  .filter((message) => message.id !== "welcome")
+                  .slice(-12)}
+                onTurn={handleVoiceTurn}
+                onStatusChange={setVoiceStatus}
+                onTextFallback={() => inputRef.current?.focus()}
+              />
+            )}
+
             {error && (
               <div className="chat-error" role="alert">
                 <p>{error}</p>
@@ -323,14 +363,18 @@ export function ChatAssistant() {
                     event.currentTarget.form?.requestSubmit();
                   }
                 }}
-                placeholder="What feels harder than it should?"
+                placeholder={
+                  isVoiceConnected
+                    ? "Type your full name and email exactly as written"
+                    : "What feels harder than it should?"
+                }
                 rows={2}
                 maxLength={2_000}
-                disabled={isSending}
+                disabled={isSending || isVoiceBusy}
               />
               <button
                 type="submit"
-                disabled={!draft.trim() || isSending}
+                disabled={!draft.trim() || isSending || isVoiceBusy}
                 aria-label="Send message"
               >
                 ↑

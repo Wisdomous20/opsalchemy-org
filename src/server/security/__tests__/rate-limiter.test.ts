@@ -30,12 +30,17 @@ describe("assistant rate limiter", () => {
     expect(consumeAssistantRateLimit("visitor", 61_000).allowed).toBe(true);
   });
 
-  it("applies a stricter hourly limit to calendar writes", () => {
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      expect(consumeSchedulingRateLimit("visitor", 1_000).allowed).toBe(true);
+  it("bounds distinct calendar writes without charging idempotent retries", () => {
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      expect(
+        consumeSchedulingRateLimit("visitor", `booking-${attempt}`, 1_000).allowed,
+      ).toBe(true);
     }
 
-    const denied = consumeSchedulingRateLimit("visitor", 1_000);
+    expect(consumeSchedulingRateLimit("visitor", "booking-0", 1_000).allowed).toBe(
+      true,
+    );
+    const denied = consumeSchedulingRateLimit("visitor", "booking-10", 1_000);
     expect(denied.allowed).toBe(false);
     expect(denied.retryAfterSeconds).toBe(3_600);
   });

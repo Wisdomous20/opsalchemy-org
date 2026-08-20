@@ -15,8 +15,17 @@ export interface CalendarMeeting {
   readonly endTime: string;
 }
 
+export interface CalendarBusyPeriod {
+  readonly startTime: string;
+  readonly endTime: string;
+}
+
 export interface CalendarSchedulingGateway {
   findByBookingKey(bookingKey: string): Promise<CalendarMeeting | null>;
+  getBusyPeriods(
+    startTime: string,
+    endTime: string,
+  ): Promise<readonly CalendarBusyPeriod[]>;
   isAvailable(startTime: string, endTime: string): Promise<boolean>;
   createMeeting(request: CalendarMeetingRequest): Promise<CalendarMeeting>;
 }

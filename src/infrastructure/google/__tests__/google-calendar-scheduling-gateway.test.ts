@@ -24,13 +24,14 @@ function jsonResponse(body: unknown, status = 200): Response {
   return Response.json(body, { status });
 }
 
-function createGateway() {
+function createGateway(conferencePollDelaysMs?: readonly number[]) {
   return new GoogleCalendarSchedulingGateway({
     clientId: "client-id",
     clientSecret: "client-secret",
     refreshToken: "refresh-token",
     calendarId: "primary",
     eventTitle: "OPSAlchemy Consultation",
+    conferencePollDelaysMs,
   });
 }
 
@@ -87,9 +88,34 @@ describe("GoogleCalendarSchedulingGateway", () => {
       .mockResolvedValueOnce(jsonResponse(completedEvent));
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(createGateway().createMeeting(request)).resolves.toMatchObject({
+    await expect(createGateway([0]).createMeeting(request)).resolves.toMatchObject({
       meetLink: completedEvent.hangoutLink,
     });
     expect(String(fetchMock.mock.calls[2]?.[0])).toContain("/events/event-id");
+  });
+
+  it("continues polling while Google reports conference creation as pending", async () => {
+    const pendingEvent = {
+      ...completedEvent,
+      hangoutLink: undefined,
+      conferenceData: {
+        createRequest: { status: { statusCode: "pending" } },
+      },
+    };
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        jsonResponse({ access_token: "access-token", expires_in: 3_600 }),
+      )
+      .mockResolvedValueOnce(jsonResponse(pendingEvent));
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      fetchMock.mockResolvedValueOnce(jsonResponse(pendingEvent));
+    }
+    fetchMock.mockResolvedValueOnce(jsonResponse(completedEvent));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      createGateway([0, 0, 0, 0, 0, 0]).createMeeting(request),
+    ).resolves.toMatchObject({ meetLink: completedEvent.hangoutLink });
   });
 });

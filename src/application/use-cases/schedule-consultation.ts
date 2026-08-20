@@ -3,9 +3,12 @@ import {
   type CalendarMeeting,
   type CalendarSchedulingGateway,
 } from "@/application/ports/calendar-scheduling-gateway";
+import {
+  CONSULTATION_TIME_ZONE,
+  consultationEndTime,
+  isAllowedConsultationStart,
+} from "@/domain/scheduling/consultation-policy";
 
-const MINIMUM_DURATION_MS = 15 * 60 * 1_000;
-const MAXIMUM_DURATION_MS = 120 * 60 * 1_000;
 const MAXIMUM_ADVANCE_MS = 180 * 24 * 60 * 60 * 1_000;
 
 export interface ScheduleConsultationInput {
@@ -13,8 +16,6 @@ export interface ScheduleConsultationInput {
   readonly attendeeEmail: string;
   readonly attendeeName: string;
   readonly startTime: string;
-  readonly endTime: string;
-  readonly timeZone: string;
   readonly confirmed: boolean;
 }
 
@@ -34,17 +35,15 @@ export class ScheduleConsultation {
     if (!input.confirmed) return { status: "confirmation_required" };
 
     const start = new Date(input.startTime);
-    const end = new Date(input.endTime);
-    const duration = end.getTime() - start.getTime();
+    const endTime = consultationEndTime(input.startTime);
     const earliestStart = this.now().getTime();
 
     if (
       !Number.isFinite(start.getTime()) ||
-      !Number.isFinite(end.getTime()) ||
+      !endTime ||
+      !isAllowedConsultationStart(input.startTime) ||
       start.getTime() <= earliestStart ||
-      start.getTime() > earliestStart + MAXIMUM_ADVANCE_MS ||
-      duration < MINIMUM_DURATION_MS ||
-      duration > MAXIMUM_DURATION_MS
+      start.getTime() > earliestStart + MAXIMUM_ADVANCE_MS
     ) {
       return { status: "invalid_time" };
     }
@@ -52,14 +51,22 @@ export class ScheduleConsultation {
     const existing = await this.gateway.findByBookingKey(input.bookingKey);
     if (existing) return { status: "booked", meeting: existing };
 
-    if (!(await this.gateway.isAvailable(input.startTime, input.endTime))) {
+    const startTime = start.toISOString();
+    if (!(await this.gateway.isAvailable(startTime, endTime))) {
       return { status: "conflict" };
     }
 
     try {
       return {
         status: "booked",
-        meeting: await this.gateway.createMeeting(input),
+        meeting: await this.gateway.createMeeting({
+          bookingKey: input.bookingKey,
+          attendeeEmail: input.attendeeEmail,
+          attendeeName: input.attendeeName,
+          startTime,
+          endTime,
+          timeZone: CONSULTATION_TIME_ZONE,
+        }),
       };
     } catch (error) {
       if (error instanceof CalendarConflictError) return { status: "conflict" };

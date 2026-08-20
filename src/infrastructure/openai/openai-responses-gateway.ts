@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import OpenAI from "openai";
 import type { ResponseInput } from "openai/resources/responses/responses";
 import { z } from "zod";
+import type { FindConsultationSlotsResult } from "@/application/use-cases/find-consultation-slots";
 import type {
   AIConversationGateway,
   AIConversationRequest,
@@ -32,31 +33,23 @@ Rules:
 - Keep answers warm, composed, practical, and concise—normally under 160 words.
 - Return readable plain text without Markdown symbols, headings, tables, or HTML.
 - Do not add fabricated citation markers. The website renders verified file citations separately.
-- You can schedule a consultation when the scheduling tool is available. Collect the visitor's name, email, exact start and end time, and IANA time zone.
-- Before scheduling, repeat the exact date, time, time zone, duration, and attendee email, then ask for an explicit yes/no confirmation.
+- Consultations are professionally managed, exactly 60 minutes, and offered only on the hour from 8:00 AM through 4:00 PM UTC+8, ending no later than 5:00 PM.
+- When a visitor wants to book, politely ask for their preferred date first. Call find_consultation_slots and present only returned slots. Each slot's displayTime is the authoritative user-facing time: reproduce it exactly and never calculate, convert, or infer a time from startTime. Use startTime only when calling the scheduling tool.
+- After they choose an available time, ask them to type their full name and email address. They may provide both in one message, and their typed spelling is authoritative.
+- Before scheduling, provide a concise confirmation summary with the full date, 60-minute time window, UTC+8, name, and email, then ask for an explicit yes/no confirmation.
 - Call schedule_consultation only after the visitor explicitly confirms those exact details. Never claim a meeting is booked unless the tool returns status "booked".
-- If the tool returns "conflict", explain that the slot is no longer available and ask for another time. If it fails, offer a human handoff.
+- If the tool returns "conflict", apologize, check availability again, and offer another returned slot. If it fails, offer a human handoff.
 `.trim();
 
 const scheduleArgumentsSchema = z.object({
   attendeeEmail: z.string().trim().email().max(254),
   attendeeName: z.string().trim().min(1).max(100),
-  startTime: z.string().datetime({ offset: true, local: false, precision: 0 }),
-  endTime: z.string().datetime({ offset: true, local: false, precision: 0 }),
-  timeZone: z
-    .string()
-    .trim()
-    .min(1)
-    .max(100)
-    .refine((value) => {
-      try {
-        new Intl.DateTimeFormat("en-US", { timeZone: value });
-        return true;
-      } catch {
-        return false;
-      }
-    }),
+  startTime: z.string().datetime({ offset: true, local: false }),
   confirmed: z.boolean(),
+});
+
+const availabilityArgumentsSchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
 });
 
 interface OpenAIResponsesGatewayOptions {
@@ -66,6 +59,9 @@ interface OpenAIResponsesGatewayOptions {
   readonly scheduleConsultation?: (
     input: ScheduleConsultationInput,
   ) => Promise<ScheduleConsultationResult>;
+  readonly findConsultationSlots?: (
+    date: string,
+  ) => Promise<FindConsultationSlotsResult>;
 }
 
 export class OpenAIResponsesGateway implements AIConversationGateway {
@@ -99,7 +95,25 @@ export class OpenAIResponsesGateway implements AIConversationGateway {
         max_num_results: 5,
       },
     ];
-    if (this.options.scheduleConsultation) {
+    if (this.options.scheduleConsultation && this.options.findConsultationSlots) {
+      tools.push({
+        type: "function",
+        name: "find_consultation_slots",
+        description:
+          "Check the owner's calendar and return the available one-hour OPSAlchemy consultation slots for a requested date. Call this before offering any appointment time.",
+        strict: true,
+        parameters: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            date: {
+              type: "string",
+              description: "Requested UTC+8 calendar date in YYYY-MM-DD format.",
+            },
+          },
+          required: ["date"],
+        },
+      });
       tools.push({
         type: "function",
         name: "schedule_consultation",
@@ -114,15 +128,8 @@ export class OpenAIResponsesGateway implements AIConversationGateway {
             attendeeName: { type: "string", description: "Visitor full name." },
             startTime: {
               type: "string",
-              description: "RFC3339 start with an explicit UTC offset.",
-            },
-            endTime: {
-              type: "string",
-              description: "RFC3339 end with an explicit UTC offset.",
-            },
-            timeZone: {
-              type: "string",
-              description: "IANA time zone such as America/New_York.",
+              description:
+                "The exact RFC3339 start returned by find_consultation_slots.",
             },
             confirmed: {
               type: "boolean",
@@ -130,14 +137,7 @@ export class OpenAIResponsesGateway implements AIConversationGateway {
                 "True only when the visitor explicitly confirmed these exact details.",
             },
           },
-          required: [
-            "attendeeEmail",
-            "attendeeName",
-            "startTime",
-            "endTime",
-            "timeZone",
-            "confirmed",
-          ],
+          required: ["attendeeEmail", "attendeeName", "startTime", "confirmed"],
         },
       });
     }
@@ -157,12 +157,22 @@ export class OpenAIResponsesGateway implements AIConversationGateway {
 
     const functionCalls = response.output.filter(
       (item): item is OpenAI.Responses.ResponseFunctionToolCall =>
-        item.type === "function_call" && item.name === "schedule_consultation",
+        item.type === "function_call" &&
+        (item.name === "schedule_consultation" ||
+          item.name === "find_consultation_slots"),
     );
-    if (functionCalls.length > 0 && this.options.scheduleConsultation) {
+    if (
+      functionCalls.length > 0 &&
+      this.options.scheduleConsultation &&
+      this.options.findConsultationSlots
+    ) {
       const outputs = await Promise.all(
         functionCalls.map(async (call) => {
-          const parsed = scheduleArgumentsSchema.safeParse(
+          const parsed = (
+            call.name === "schedule_consultation"
+              ? scheduleArgumentsSchema
+              : availabilityArgumentsSchema
+          ).safeParse(
             (() => {
               try {
                 return JSON.parse(call.arguments) as unknown;
@@ -180,11 +190,25 @@ export class OpenAIResponsesGateway implements AIConversationGateway {
           }
 
           try {
+            if (call.name === "find_consultation_slots") {
+              const result = await this.options.findConsultationSlots!(
+                (parsed.data as z.infer<typeof availabilityArgumentsSchema>).date,
+              );
+              return {
+                type: "function_call_output" as const,
+                call_id: call.call_id,
+                output: JSON.stringify(result),
+              };
+            }
             const bookingKey = createHash("sha256")
-              .update(`${request.conversationId}:${call.call_id}`)
+              .update(
+                `${request.conversationId}:${new Date(
+                  (parsed.data as z.infer<typeof scheduleArgumentsSchema>).startTime,
+                ).toISOString()}`,
+              )
               .digest("hex");
             const result = await this.options.scheduleConsultation!({
-              ...parsed.data,
+              ...(parsed.data as z.infer<typeof scheduleArgumentsSchema>),
               bookingKey,
             });
             return {

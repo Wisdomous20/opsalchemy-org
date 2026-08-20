@@ -13,9 +13,8 @@ const validBody = {
   callId: "call_123",
   attendeeEmail: "visitor@example.com",
   attendeeName: "Visitor Name",
-  startTime: "2026-09-01T10:00:00+08:00",
-  endTime: "2026-09-01T10:30:00+08:00",
-  timeZone: "Asia/Shanghai",
+  // This is the exact format returned by find_consultation_slots.
+  startTime: "2026-09-01T02:00:00.000Z",
   confirmed: true,
 };
 
@@ -62,6 +61,18 @@ describe("POST /api/realtime/schedule", () => {
 
     expect(response.status).toBe(400);
     expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("treats repeated calls for the same conversation slot as one rate-limit operation", async () => {
+    execute.mockResolvedValue({ status: "confirmation_required" });
+
+    for (let attempt = 0; attempt < 12; attempt += 1) {
+      const response = await POST(
+        request({ ...validBody, callId: `realtime_retry_${attempt}` }),
+      );
+      expect(response.status).toBe(200);
+    }
+    expect(execute).toHaveBeenCalledTimes(12);
   });
 
   it("fails safely when scheduling is not configured", async () => {

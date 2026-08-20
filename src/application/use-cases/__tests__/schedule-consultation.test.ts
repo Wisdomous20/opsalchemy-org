@@ -10,7 +10,7 @@ const meeting = {
   htmlLink: "https://calendar.google.com/event/1",
   meetLink: "https://meet.google.com/abc-defg-hij",
   startTime: "2026-09-01T10:00:00+08:00",
-  endTime: "2026-09-01T10:30:00+08:00",
+  endTime: "2026-09-01T11:00:00+08:00",
 };
 
 const validInput = {
@@ -18,14 +18,13 @@ const validInput = {
   attendeeEmail: "visitor@example.com",
   attendeeName: "Visitor Name",
   startTime: meeting.startTime,
-  endTime: meeting.endTime,
-  timeZone: "Asia/Shanghai",
   confirmed: true,
 };
 
 function createGateway(): CalendarSchedulingGateway {
   return {
     findByBookingKey: vi.fn().mockResolvedValue(null),
+    getBusyPeriods: vi.fn().mockResolvedValue([]),
     isAvailable: vi.fn().mockResolvedValue(true),
     createMeeting: vi.fn().mockResolvedValue(meeting),
   };
@@ -87,7 +86,14 @@ describe("ScheduleConsultation", () => {
       status: "booked",
       meeting,
     });
-    expect(gateway.createMeeting).toHaveBeenCalledWith(validInput);
+    expect(gateway.createMeeting).toHaveBeenCalledWith({
+      bookingKey: validInput.bookingKey,
+      attendeeEmail: validInput.attendeeEmail,
+      attendeeName: validInput.attendeeName,
+      startTime: "2026-09-01T02:00:00.000Z",
+      endTime: "2026-09-01T03:00:00.000Z",
+      timeZone: "Etc/GMT-8",
+    });
   });
 
   it("translates an insert-time race into a slot conflict", async () => {
@@ -104,10 +110,11 @@ describe("ScheduleConsultation", () => {
   });
 
   it.each([
-    { startTime: "2026-08-19T10:00:00+08:00", endTime: "2026-08-19T10:30:00+08:00" },
-    { startTime: "2026-09-01T10:00:00+08:00", endTime: "2026-09-01T10:05:00+08:00" },
-    { startTime: "2026-09-01T10:00:00+08:00", endTime: "2026-09-01T13:00:00+08:00" },
-  ])("rejects unsafe time ranges before calendar access", async (times) => {
+    { startTime: "2026-08-19T10:00:00+08:00" },
+    { startTime: "2026-09-01T07:00:00+08:00" },
+    { startTime: "2026-09-01T16:30:00+08:00" },
+    { startTime: "2026-09-01T17:00:00+08:00" },
+  ])("rejects past, off-hour, and outside-hours starts", async (times) => {
     const gateway = createGateway();
     const useCase = new ScheduleConsultation(
       gateway,

@@ -15,8 +15,11 @@ const WINDOW_MS = 60_000;
 const MAX_REQUESTS = 10;
 const entries = new Map<string, RateLimitEntry>();
 const SCHEDULING_WINDOW_MS = 60 * 60_000;
-const MAX_SCHEDULING_REQUESTS = 3;
-const schedulingEntries = new Map<string, RateLimitEntry>();
+const MAX_SCHEDULING_REQUESTS = 10;
+interface SchedulingRateLimitEntry extends RateLimitEntry {
+  readonly operationKeys: Set<string>;
+}
+const schedulingEntries = new Map<string, SchedulingRateLimitEntry>();
 
 function anonymize(identifier: string): string {
   return createHash("sha256").update(identifier).digest("hex").slice(0, 24);
@@ -57,6 +60,7 @@ export function consumeAssistantRateLimit(
 
 export function consumeSchedulingRateLimit(
   identifier: string,
+  operationKey: string,
   now = Date.now(),
 ): RateLimitResult {
   const existing = schedulingEntries.get(identifier);
@@ -65,10 +69,21 @@ export function consumeSchedulingRateLimit(
     schedulingEntries.set(identifier, {
       count: 1,
       resetAt: now + SCHEDULING_WINDOW_MS,
+      operationKeys: new Set([operationKey]),
     });
     return {
       allowed: true,
       remaining: MAX_SCHEDULING_REQUESTS - 1,
+      retryAfterSeconds: 0,
+    };
+  }
+
+  // Realtime delivery can retry the same function call. It is already
+  // idempotent at the Calendar boundary and must not consume another quota unit.
+  if (existing.operationKeys.has(operationKey)) {
+    return {
+      allowed: true,
+      remaining: MAX_SCHEDULING_REQUESTS - existing.count,
       retryAfterSeconds: 0,
     };
   }
@@ -82,6 +97,7 @@ export function consumeSchedulingRateLimit(
   }
 
   existing.count += 1;
+  existing.operationKeys.add(operationKey);
   return {
     allowed: true,
     remaining: MAX_SCHEDULING_REQUESTS - existing.count,

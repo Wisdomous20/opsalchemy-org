@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 import {
   CalendarConflictError,
+  type CalendarBusyPeriod,
   type CalendarMeeting,
   type CalendarMeetingRequest,
   type CalendarSchedulingGateway,
@@ -68,7 +69,11 @@ interface GoogleCalendarSchedulingGatewayOptions {
   readonly refreshToken: string;
   readonly calendarId: string;
   readonly eventTitle: string;
+  /** Overrides production backoff only for deterministic adapter tests. */
+  readonly conferencePollDelaysMs?: readonly number[];
 }
+
+const DEFAULT_CONFERENCE_POLL_DELAYS_MS = [250, 500, 750, 1_000, 1_500, 2_000];
 
 export class GoogleCalendarSchedulingGateway implements CalendarSchedulingGateway {
   private accessToken: { value: string; expiresAt: number } | null = null;
@@ -92,6 +97,13 @@ export class GoogleCalendarSchedulingGateway implements CalendarSchedulingGatewa
   }
 
   async isAvailable(startTime: string, endTime: string): Promise<boolean> {
+    return (await this.getBusyPeriods(startTime, endTime)).length === 0;
+  }
+
+  async getBusyPeriods(
+    startTime: string,
+    endTime: string,
+  ): Promise<readonly CalendarBusyPeriod[]> {
     const response = await this.calendarFetch("/freeBusy", {
       method: "POST",
       body: JSON.stringify({
@@ -106,7 +118,10 @@ export class GoogleCalendarSchedulingGateway implements CalendarSchedulingGatewa
     if (!calendar || calendar.errors?.length) {
       throw new Error("Google Calendar availability could not be determined.");
     }
-    return calendar.busy.length === 0;
+    return calendar.busy.map((period) => ({
+      startTime: period.start,
+      endTime: period.end,
+    }));
   }
 
   async createMeeting(request: CalendarMeetingRequest): Promise<CalendarMeeting> {
@@ -166,8 +181,10 @@ export class GoogleCalendarSchedulingGateway implements CalendarSchedulingGatewa
     initialEvent: z.infer<typeof eventSchema>,
   ): Promise<CalendarMeeting> {
     let event = initialEvent;
+    const delays =
+      this.options.conferencePollDelaysMs ?? DEFAULT_CONFERENCE_POLL_DELAYS_MS;
 
-    for (let attempt = 0; attempt < 5; attempt += 1) {
+    for (let attempt = 0; attempt <= delays.length; attempt += 1) {
       const meetLink =
         event.hangoutLink ??
         event.conferenceData?.entryPoints?.find(
@@ -178,9 +195,9 @@ export class GoogleCalendarSchedulingGateway implements CalendarSchedulingGatewa
       if (event.conferenceData?.createRequest?.status?.statusCode === "failure") {
         throw new Error("Google Meet conference creation failed.");
       }
-      if (attempt === 4) break;
+      if (attempt === delays.length) break;
 
-      await new Promise((resolve) => setTimeout(resolve, 250));
+      await new Promise((resolve) => setTimeout(resolve, delays[attempt]));
       const response = await this.calendarFetch(
         `/calendars/${encodeURIComponent(this.options.calendarId)}/events/${encodeURIComponent(event.id)}`,
       );

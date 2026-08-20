@@ -33,13 +33,6 @@ export async function POST(request: Request): Promise<Response> {
     return jsonResponse({ error: "unsupported_media_type", requestId }, 415);
   }
 
-  const rateLimit = consumeSchedulingRateLimit(getRateLimitIdentifier(request));
-  if (!rateLimit.allowed) {
-    return jsonResponse({ error: "rate_limited", requestId }, 429, {
-      "Retry-After": String(rateLimit.retryAfterSeconds),
-    });
-  }
-
   let rawBody: unknown;
   try {
     rawBody = await request.json();
@@ -51,17 +44,40 @@ export async function POST(request: Request): Promise<Response> {
     return jsonResponse({ error: "invalid_request", requestId }, 400);
   }
 
+  const normalizedStartTime = new Date(parsed.data.startTime).toISOString();
+  const bookingKey = createHash("sha256")
+    .update(`${parsed.data.conversationId}:${normalizedStartTime}`)
+    .digest("hex");
+  const rateLimit = consumeSchedulingRateLimit(
+    getRateLimitIdentifier(request),
+    bookingKey,
+  );
+  if (!rateLimit.allowed) {
+    return jsonResponse(
+      {
+        error: "rate_limited",
+        retryAfterSeconds: rateLimit.retryAfterSeconds,
+        requestId,
+      },
+      429,
+      { "Retry-After": String(rateLimit.retryAfterSeconds) },
+    );
+  }
+
   const scheduler = getScheduleConsultation();
   if (!scheduler) {
     return jsonResponse({ error: "scheduling_unavailable", requestId }, 503);
   }
 
   try {
-    const { conversationId, callId, ...details } = parsed.data;
-    const bookingKey = createHash("sha256")
-      .update(`${conversationId}:${callId}`)
-      .digest("hex");
-    const result = await scheduler.execute({ ...details, bookingKey });
+    const { conversationId } = parsed.data;
+    const result = await scheduler.execute({
+      bookingKey,
+      attendeeEmail: parsed.data.attendeeEmail,
+      attendeeName: parsed.data.attendeeName,
+      startTime: parsed.data.startTime,
+      confirmed: parsed.data.confirmed,
+    });
     console.info(
       JSON.stringify({
         event: "assistant.consultation_schedule",
