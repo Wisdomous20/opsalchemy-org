@@ -37,7 +37,8 @@ Rules:
 - When a visitor wants to book, politely ask for their preferred date first. Call find_consultation_slots and present only returned slots. Each slot's displayTime is the authoritative user-facing time: reproduce it exactly and never calculate, convert, or infer a time from startTime. Use startTime only when calling the scheduling tool.
 - After they choose an available time, ask them to type their full name and email address. They may provide both in one message, and their typed spelling is authoritative.
 - Before scheduling, provide a concise confirmation summary with the full date, 60-minute time window, UTC+8, name, and email, then ask for an explicit yes/no confirmation.
-- Call schedule_consultation only after the visitor explicitly confirms those exact details. Never claim a meeting is booked unless the tool returns status "booked".
+- Text history does not retain earlier tool results. After the visitor explicitly confirms the exact summary, call find_consultation_slots again for the confirmed date to recover the authoritative startTime, then call schedule_consultation in the same turn using the matching returned slot. Do not ask for confirmation again.
+- Call schedule_consultation only after that explicit confirmation. Never claim a meeting is booked unless the tool returns status "booked".
 - If the tool returns "conflict", apologize, check availability again, and offer another returned slot. If it fails, offer a human handoff.
 `.trim();
 
@@ -51,6 +52,8 @@ const scheduleArgumentsSchema = z.object({
 const availabilityArgumentsSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
 });
+
+const MAX_FUNCTION_CALL_ROUNDS = 4;
 
 interface OpenAIResponsesGatewayOptions {
   readonly apiKey: string;
@@ -152,85 +155,104 @@ export class OpenAIResponsesGateway implements AIConversationGateway {
     } satisfies OpenAI.Responses.ResponseCreateParamsNonStreaming;
 
     const responses: OpenAI.Responses.Response[] = [];
+    const verifiedStartTimes = new Set<string>();
+    let continuationInput = input;
     let response = await this.client.responses.create({ ...requestOptions, input });
     responses.push(response);
 
-    const functionCalls = response.output.filter(
-      (item): item is OpenAI.Responses.ResponseFunctionToolCall =>
-        item.type === "function_call" &&
-        (item.name === "schedule_consultation" ||
-          item.name === "find_consultation_slots"),
-    );
-    if (
-      functionCalls.length > 0 &&
-      this.options.scheduleConsultation &&
-      this.options.findConsultationSlots
-    ) {
-      const outputs = await Promise.all(
-        functionCalls.map(async (call) => {
-          const parsed = (
-            call.name === "schedule_consultation"
-              ? scheduleArgumentsSchema
-              : availabilityArgumentsSchema
-          ).safeParse(
-            (() => {
-              try {
-                return JSON.parse(call.arguments) as unknown;
-              } catch {
-                return null;
-              }
-            })(),
-          );
-          if (!parsed.success) {
-            return {
-              type: "function_call_output" as const,
-              call_id: call.call_id,
-              output: JSON.stringify({ status: "invalid_request" }),
-            };
-          }
+    for (let round = 0; round < MAX_FUNCTION_CALL_ROUNDS; round += 1) {
+      const functionCalls = response.output.filter(
+        (item): item is OpenAI.Responses.ResponseFunctionToolCall =>
+          item.type === "function_call" &&
+          (item.name === "schedule_consultation" ||
+            item.name === "find_consultation_slots"),
+      );
+      if (
+        functionCalls.length === 0 ||
+        !this.options.scheduleConsultation ||
+        !this.options.findConsultationSlots
+      ) {
+        break;
+      }
 
-          try {
-            if (call.name === "find_consultation_slots") {
-              const result = await this.options.findConsultationSlots!(
-                (parsed.data as z.infer<typeof availabilityArgumentsSchema>).date,
-              );
-              return {
-                type: "function_call_output" as const,
-                call_id: call.call_id,
-                output: JSON.stringify(result),
-              };
+      const outputs: OpenAI.Responses.ResponseInputItem.FunctionCallOutput[] = [];
+      // Run side-effecting calls in model order so one response cannot create
+      // multiple appointments concurrently and bypass idempotency checks.
+      for (const call of functionCalls) {
+        const parsed = (
+          call.name === "schedule_consultation"
+            ? scheduleArgumentsSchema
+            : availabilityArgumentsSchema
+        ).safeParse(
+          (() => {
+            try {
+              return JSON.parse(call.arguments) as unknown;
+            } catch {
+              return null;
             }
-            const bookingKey = createHash("sha256")
-              .update(
-                `${request.conversationId}:${new Date(
-                  (parsed.data as z.infer<typeof scheduleArgumentsSchema>).startTime,
-                ).toISOString()}`,
-              )
-              .digest("hex");
-            const result = await this.options.scheduleConsultation!({
-              ...(parsed.data as z.infer<typeof scheduleArgumentsSchema>),
-              bookingKey,
+          })(),
+        );
+        if (!parsed.success) {
+          outputs.push({
+            type: "function_call_output" as const,
+            call_id: call.call_id,
+            output: JSON.stringify({ status: "invalid_request" }),
+          });
+          continue;
+        }
+
+        try {
+          if (call.name === "find_consultation_slots") {
+            const result = await this.options.findConsultationSlots!(
+              (parsed.data as z.infer<typeof availabilityArgumentsSchema>).date,
+            );
+            result.slots.forEach((slot) => {
+              verifiedStartTimes.add(new Date(slot.startTime).toISOString());
             });
-            return {
+            outputs.push({
               type: "function_call_output" as const,
               call_id: call.call_id,
               output: JSON.stringify(result),
-            };
-          } catch {
-            return {
+            });
+            continue;
+          }
+          const normalizedStartTime = new Date(
+            (parsed.data as z.infer<typeof scheduleArgumentsSchema>).startTime,
+          ).toISOString();
+          if (!verifiedStartTimes.has(normalizedStartTime)) {
+            outputs.push({
               type: "function_call_output" as const,
               call_id: call.call_id,
-              output: JSON.stringify({ status: "unavailable" }),
-            };
+              output: JSON.stringify({ status: "availability_check_required" }),
+            });
+            continue;
           }
-        }),
-      );
+          const bookingKey = createHash("sha256")
+            .update(`${request.conversationId}:${normalizedStartTime}`)
+            .digest("hex");
+          const result = await this.options.scheduleConsultation!({
+            ...(parsed.data as z.infer<typeof scheduleArgumentsSchema>),
+            bookingKey,
+          });
+          outputs.push({
+            type: "function_call_output" as const,
+            call_id: call.call_id,
+            output: JSON.stringify(result),
+          });
+        } catch {
+          outputs.push({
+            type: "function_call_output" as const,
+            call_id: call.call_id,
+            output: JSON.stringify({ status: "unavailable" }),
+          });
+        }
+      }
 
       // The API explicitly supports replaying response output as the next input.
       // The SDK's broader output union contains a status variant its input union
       // does not yet model, so narrow the known-valid continuation at this seam.
-      const continuationInput = [
-        ...input,
+      continuationInput = [
+        ...continuationInput,
         ...response.output,
         ...outputs,
       ] as ResponseInput;
