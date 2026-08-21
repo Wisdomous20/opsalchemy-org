@@ -13,6 +13,7 @@ model Lead {
   email               String                @unique @db.VarChar(320)
   phone               String?               @db.VarChar(32)
   conversationSummary String                @map("conversation_summary") @db.Text
+  contactAllowed      Boolean               @map("contact_allowed")
   crmSyncAllowed      Boolean               @map("crm_sync_allowed")
   consentRecordedAt   DateTime              @map("consent_recorded_at") @db.Timestamptz(3)
   createdAt           DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)

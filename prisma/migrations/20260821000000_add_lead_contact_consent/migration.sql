@@ -1,0 +1,2 @@
+ALTER TABLE "leads"
+ADD COLUMN "contact_allowed" BOOLEAN NOT NULL DEFAULT FALSE;

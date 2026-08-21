@@ -14,6 +14,10 @@ function jsonResponse(body: unknown, status: number): Response {
 }
 
 export async function GET(): Promise<Response> {
+  if (process.env.NODE_ENV === "production") {
+    return jsonResponse({ error: "not_found" }, 404);
+  }
+
   try {
     const leads = await getListLeads().execute();
 

@@ -25,6 +25,7 @@ describe("GET /api/leads", () => {
         phone: null,
         serviceInterests: ["operations-mentorship"],
         conversationSummary: "Needs help documenting operations.",
+        contactAllowed: true,
         crmSyncAllowed: false,
         consentRecordedAt: new Date("2026-08-20T08:00:00.000Z"),
         createdAt: new Date("2026-08-20T08:01:00.000Z"),

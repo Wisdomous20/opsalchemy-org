@@ -7,6 +7,7 @@ export interface LeadReadModel {
   readonly phone: string | null;
   readonly serviceInterests: readonly ServiceId[];
   readonly conversationSummary: string;
+  readonly contactAllowed: boolean;
   readonly crmSyncAllowed: boolean;
   readonly consentRecordedAt: Date;
   readonly createdAt: Date;

@@ -18,7 +18,7 @@ export default function PrivacyPage() {
       <article className="shell legal-copy">
         <p className="eyebrow">Privacy</p>
         <h1>Your information should be handled with care.</h1>
-        <p className="legal-copy__updated">Last updated August 19, 2026</p>
+        <p className="legal-copy__updated">Last updated August 21, 2026</p>
         <h2>Information you choose to share</h2>
         <p>
           When you contact OPSAlchemy by email, we receive the information you include
@@ -51,6 +51,13 @@ export default function PrivacyPage() {
           with speech. A live transcript is displayed during the session but is not
           added to the saved text-chat history. Ending voice stops the microphone tracks
           and closes the connection.
+        </p>
+        <p>
+          If you request a consultation and give permission to continue, OPSAlchemy
+          stores your full name, email address, mobile number, consent time, relevant
+          service interests, and a limited note that the consultation was requested. We
+          use those details to arrange and follow up about the consultation. This
+          permission does not enroll you in unrelated marketing messages.
         </p>
         <h2>Sharing and retention</h2>
         <p>

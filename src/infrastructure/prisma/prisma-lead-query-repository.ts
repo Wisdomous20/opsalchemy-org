@@ -41,6 +41,7 @@ export class PrismaLeadQueryRepository implements LeadQueryRepository {
         toServiceId(serviceId),
       ),
       conversationSummary: lead.conversationSummary,
+      contactAllowed: lead.contactAllowed,
       crmSyncAllowed: lead.crmSyncAllowed,
       consentRecordedAt: lead.consentRecordedAt,
       createdAt: lead.createdAt,

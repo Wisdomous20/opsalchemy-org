@@ -325,20 +325,6 @@ export function ChatAssistant() {
               </div>
             )}
 
-            {conversation && (
-              <VoiceAssistant
-                key={conversation.conversationId}
-                conversationId={conversation.conversationId}
-                controllerRef={voiceRef}
-                history={conversation.messages
-                  .filter((message) => message.id !== "welcome")
-                  .slice(-12)}
-                onTurn={handleVoiceTurn}
-                onStatusChange={setVoiceStatus}
-                onTextFallback={() => inputRef.current?.focus()}
-              />
-            )}
-
             {error && (
               <div className="chat-error" role="alert">
                 <p>{error}</p>
@@ -350,8 +336,23 @@ export function ChatAssistant() {
           </div>
 
           <form className="chat-composer" onSubmit={handleSubmit}>
-            <label htmlFor="assistant-message">Ask about your operations</label>
-            <div>
+            <div className="chat-composer__heading">
+              <label htmlFor="assistant-message">Ask about your operations</label>
+              {conversation && (
+                <VoiceAssistant
+                  key={conversation.conversationId}
+                  conversationId={conversation.conversationId}
+                  controllerRef={voiceRef}
+                  history={conversation.messages
+                    .filter((message) => message.id !== "welcome")
+                    .slice(-12)}
+                  onTurn={handleVoiceTurn}
+                  onStatusChange={setVoiceStatus}
+                  onTextFallback={() => inputRef.current?.focus()}
+                />
+              )}
+            </div>
+            <div className="chat-composer__field">
               <textarea
                 id="assistant-message"
                 ref={inputRef}
@@ -365,7 +366,7 @@ export function ChatAssistant() {
                 }}
                 placeholder={
                   isVoiceConnected
-                    ? "Type your full name and email exactly as written"
+                    ? "Type your name, email, and mobile number exactly as written"
                     : "What feels harder than it should?"
                 }
                 rows={2}

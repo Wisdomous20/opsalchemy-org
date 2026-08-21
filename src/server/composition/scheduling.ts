@@ -1,8 +1,12 @@
 import "server-only";
 
 import { FindConsultationSlots } from "@/application/use-cases/find-consultation-slots";
+import { CaptureLead } from "@/application/use-cases/capture-lead";
 import { ScheduleConsultation } from "@/application/use-cases/schedule-consultation";
 import { GoogleCalendarSchedulingGateway } from "@/infrastructure/google/google-calendar-scheduling-gateway";
+import { createPrismaClient } from "@/infrastructure/prisma/prisma-client";
+import { PrismaLeadRepository } from "@/infrastructure/prisma/prisma-lead-repository";
+import { getDatabaseUrl } from "@/server/config/database-env";
 import type { ServerEnv } from "@/server/config/env-schema";
 import { getServerEnv } from "@/server/config/env";
 
@@ -32,7 +36,14 @@ export function createScheduleConsultation(
   environment: ServerEnv,
 ): ScheduleConsultation | null {
   const gateway = createGateway(environment);
-  return gateway ? new ScheduleConsultation(gateway) : null;
+  if (!gateway) return null;
+
+  const leadRepository = new PrismaLeadRepository(createPrismaClient(getDatabaseUrl()));
+  return new ScheduleConsultation(
+    gateway,
+    new CaptureLead(leadRepository),
+    () => new Date(),
+  );
 }
 
 export function createFindConsultationSlots(

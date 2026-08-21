@@ -13,6 +13,8 @@ const validBody = {
   callId: "call_123",
   attendeeEmail: "visitor@example.com",
   attendeeName: "Visitor Name",
+  attendeePhone: "+1 202 555 0147",
+  contactConsent: true,
   // This is the exact format returned by find_consultation_slots.
   startTime: "2026-09-01T02:00:00.000Z",
   confirmed: true,
@@ -58,6 +60,15 @@ describe("POST /api/realtime/schedule", () => {
     const response = await POST(
       request({ ...validBody, attendeeEmail: "not-an-email" }),
     );
+
+    expect(response.status).toBe(400);
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("rejects a missing mobile number before the calendar use case", async () => {
+    const withoutPhone: Partial<typeof validBody> = { ...validBody };
+    delete withoutPhone.attendeePhone;
+    const response = await POST(request(withoutPhone));
 
     expect(response.status).toBe(400);
     expect(execute).not.toHaveBeenCalled();

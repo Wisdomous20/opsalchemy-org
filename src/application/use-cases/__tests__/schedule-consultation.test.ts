@@ -17,6 +17,10 @@ const validInput = {
   bookingKey: "booking-key",
   attendeeEmail: "visitor@example.com",
   attendeeName: "Visitor Name",
+  attendeePhone: "+1 202 555 0147",
+  channel: "text" as const,
+  contactConsent: true,
+  serviceInterests: [],
   startTime: meeting.startTime,
   confirmed: true,
 };
@@ -30,13 +34,21 @@ function createGateway(): CalendarSchedulingGateway {
   };
 }
 
+function createUseCase(
+  gateway: CalendarSchedulingGateway,
+  captureLead = { execute: vi.fn().mockResolvedValue({ status: "captured" }) },
+) {
+  return new ScheduleConsultation(
+    gateway,
+    captureLead as never,
+    () => new Date("2026-08-20T00:00:00Z"),
+  );
+}
+
 describe("ScheduleConsultation", () => {
   it("requires explicit confirmation before reading or writing the calendar", async () => {
     const gateway = createGateway();
-    const useCase = new ScheduleConsultation(
-      gateway,
-      () => new Date("2026-08-20T00:00:00Z"),
-    );
+    const useCase = createUseCase(gateway);
 
     await expect(useCase.execute({ ...validInput, confirmed: false })).resolves.toEqual(
       { status: "confirmation_required" },
@@ -45,13 +57,21 @@ describe("ScheduleConsultation", () => {
     expect(gateway.createMeeting).not.toHaveBeenCalled();
   });
 
+  it("requires contact consent before reading or writing the calendar", async () => {
+    const gateway = createGateway();
+    const useCase = createUseCase(gateway);
+
+    await expect(
+      useCase.execute({ ...validInput, contactConsent: false }),
+    ).resolves.toEqual({ status: "consent_required" });
+    expect(gateway.findByBookingKey).not.toHaveBeenCalled();
+    expect(gateway.createMeeting).not.toHaveBeenCalled();
+  });
+
   it("returns an existing booking without creating a duplicate", async () => {
     const gateway = createGateway();
     vi.mocked(gateway.findByBookingKey).mockResolvedValue(meeting);
-    const useCase = new ScheduleConsultation(
-      gateway,
-      () => new Date("2026-08-20T00:00:00Z"),
-    );
+    const useCase = createUseCase(gateway);
 
     await expect(useCase.execute(validInput)).resolves.toEqual({
       status: "booked",
@@ -64,10 +84,7 @@ describe("ScheduleConsultation", () => {
   it("does not create an event when the slot is busy", async () => {
     const gateway = createGateway();
     vi.mocked(gateway.isAvailable).mockResolvedValue(false);
-    const useCase = new ScheduleConsultation(
-      gateway,
-      () => new Date("2026-08-20T00:00:00Z"),
-    );
+    const useCase = createUseCase(gateway);
 
     await expect(useCase.execute(validInput)).resolves.toEqual({
       status: "conflict",
@@ -77,10 +94,7 @@ describe("ScheduleConsultation", () => {
 
   it("creates a meeting when the confirmed slot is available", async () => {
     const gateway = createGateway();
-    const useCase = new ScheduleConsultation(
-      gateway,
-      () => new Date("2026-08-20T00:00:00Z"),
-    );
+    const useCase = createUseCase(gateway);
 
     await expect(useCase.execute(validInput)).resolves.toEqual({
       status: "booked",
@@ -96,13 +110,44 @@ describe("ScheduleConsultation", () => {
     });
   });
 
+  it("captures the consenting lead before creating the calendar event", async () => {
+    const gateway = createGateway();
+    const captureLead = {
+      execute: vi.fn().mockResolvedValue({ status: "captured" }),
+    };
+    const useCase = createUseCase(gateway, captureLead);
+
+    await useCase.execute(validInput);
+
+    expect(captureLead.execute).toHaveBeenCalledWith({
+      name: validInput.attendeeName,
+      email: validInput.attendeeEmail,
+      phone: validInput.attendeePhone,
+      channel: validInput.channel,
+      serviceInterests: validInput.serviceInterests,
+      consentConfirmed: true,
+    });
+    expect(captureLead.execute.mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(gateway.createMeeting).mock.invocationCallOrder[0] ?? Infinity,
+    );
+  });
+
+  it("does not create a calendar event when lead persistence fails", async () => {
+    const gateway = createGateway();
+    const captureLead = {
+      execute: vi.fn().mockRejectedValue(new Error("database unavailable")),
+    };
+    const useCase = createUseCase(gateway, captureLead);
+
+    await expect(useCase.execute(validInput)).rejects.toThrow("database unavailable");
+    expect(gateway.findByBookingKey).not.toHaveBeenCalled();
+    expect(gateway.createMeeting).not.toHaveBeenCalled();
+  });
+
   it("translates an insert-time race into a slot conflict", async () => {
     const gateway = createGateway();
     vi.mocked(gateway.createMeeting).mockRejectedValue(new CalendarConflictError());
-    const useCase = new ScheduleConsultation(
-      gateway,
-      () => new Date("2026-08-20T00:00:00Z"),
-    );
+    const useCase = createUseCase(gateway);
 
     await expect(useCase.execute(validInput)).resolves.toEqual({
       status: "conflict",
@@ -116,10 +161,7 @@ describe("ScheduleConsultation", () => {
     { startTime: "2026-09-01T17:00:00+08:00" },
   ])("rejects past, off-hour, and outside-hours starts", async (times) => {
     const gateway = createGateway();
-    const useCase = new ScheduleConsultation(
-      gateway,
-      () => new Date("2026-08-20T00:00:00Z"),
-    );
+    const useCase = createUseCase(gateway);
 
     await expect(useCase.execute({ ...validInput, ...times })).resolves.toEqual({
       status: "invalid_time",

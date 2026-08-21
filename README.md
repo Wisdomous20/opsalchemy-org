@@ -75,6 +75,11 @@ Calendar. They collect the visitor's name, email, exact time, and time zone, req
 explicit confirmation, check free/busy, and then create a Google Meet event. Google
 Calendar sends the attendee invitation as the confirmation email.
 
+Consultation requests also require a mobile number with country code and permission
+for OPSAlchemy to save the contact details and follow up about the consultation. The
+lead is saved before the calendar event is created. The local lead ledger is disabled
+in production until administrator authentication is implemented.
+
 Consultations use fixed one-hour slots in UTC+8. The assistant checks the connected
 calendar and offers only available start times from 8:00 AM through 4:00 PM, with the
 last consultation ending at 5:00 PM.

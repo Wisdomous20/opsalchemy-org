@@ -35,7 +35,13 @@ describe("OpenAIRealtimeSessionGateway", () => {
       "Do not repeat the summary or ask for confirmation again",
     );
     expect(body.session.instructions).toContain(
-      "type their full name and email address into the message box",
+      "type their full name, email address, and mobile number with country code",
+    );
+    const scheduleTool = body.session.tools.find(
+      (tool: { name: string }) => tool.name === "schedule_consultation",
+    );
+    expect(scheduleTool.parameters.required).toEqual(
+      expect.arrayContaining(["attendeePhone", "contactConsent"]),
     );
     expect(body.session.instructions).toContain("Read displayTime exactly as provided");
     expect(body.session.audio.input.transcription).not.toHaveProperty("prompt");

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 
 import { BrandMark } from "@/components/marketing/brand-mark";
 import { LeadsDashboard } from "./leads-dashboard";
@@ -12,6 +13,8 @@ export const metadata: Metadata = {
 };
 
 export default function LeadsPage() {
+  if (process.env.NODE_ENV === "production") notFound();
+
   return (
     <main className={styles.page}>
       <header className={styles.header}>

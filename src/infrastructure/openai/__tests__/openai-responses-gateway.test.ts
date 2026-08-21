@@ -65,6 +65,8 @@ describe("OpenAIResponsesGateway", () => {
             arguments: JSON.stringify({
               attendeeEmail: "visitor@example.com",
               attendeeName: "Visitor Name",
+              attendeePhone: "+1 202 555 0147",
+              contactConsent: true,
               startTime,
               confirmed: true,
             }),
@@ -99,6 +101,10 @@ describe("OpenAIResponsesGateway", () => {
     expect(scheduleConsultation).toHaveBeenCalledWith({
       attendeeEmail: "visitor@example.com",
       attendeeName: "Visitor Name",
+      attendeePhone: "+1 202 555 0147",
+      channel: "text",
+      contactConsent: true,
+      serviceInterests: [],
       startTime,
       confirmed: true,
       bookingKey: createHash("sha256")
@@ -122,6 +128,8 @@ describe("OpenAIResponsesGateway", () => {
             arguments: JSON.stringify({
               attendeeEmail: "visitor@example.com",
               attendeeName: "Visitor Name",
+              attendeePhone: "+1 202 555 0147",
+              contactConsent: true,
               startTime: "2026-08-24T08:00:00+08:00",
               confirmed: true,
             }),

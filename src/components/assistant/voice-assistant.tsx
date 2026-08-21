@@ -706,9 +706,32 @@ export function VoiceAssistant({
 
   const isActive = ["connecting", "listening", "thinking", "speaking"].includes(status);
 
+  if (!isActive) {
+    return (
+      <section
+        className="voice-assistant voice-assistant--offer"
+        aria-label="Virtual voice call"
+      >
+        <button type="button" className="voice-start" onClick={() => void startVoice()}>
+          <span className={`voice-status voice-status--${status}`} aria-hidden="true">
+            <i />
+            <i />
+            <i />
+          </span>
+          {status === "idle" ? "Switch to voice" : "Retry voice"}
+        </button>
+        {error && (
+          <p className="voice-error" role="alert">
+            {error}
+          </p>
+        )}
+      </section>
+    );
+  }
+
   return (
     <section
-      className={`voice-assistant voice-assistant--${isActive ? "active" : "offer"}`}
+      className="voice-assistant voice-assistant--active"
       aria-label="Virtual voice call"
     >
       <div className="voice-assistant__intro">
@@ -719,46 +742,23 @@ export function VoiceAssistant({
             <i />
           </span>
           <div>
-            <strong>
-              {isActive ? "Virtual call with the Guide" : "Prefer a virtual call?"}
-            </strong>
-            <p aria-live="polite">
-              {isActive
-                ? STATUS_LABELS[status]
-                : status === "error"
-                  ? STATUS_LABELS.error
-                  : "Speak live and the Guide will take over. Your chat stays in sync."}
-            </p>
+            <strong>Virtual call with the Guide</strong>
+            <p aria-live="polite">{STATUS_LABELS[status]}</p>
           </div>
         </div>
-        {!isActive ? (
-          <button
-            type="button"
-            className="voice-start"
-            onClick={() => void startVoice()}
-          >
-            <span aria-hidden="true">◉</span>
-            {status === "idle" ? "Start virtual call" : "Try virtual call again"}
+        <div className="voice-actions">
+          {status === "speaking" && (
+            <button type="button" onClick={stopReply}>
+              Stop reply
+            </button>
+          )}
+          <button type="button" onClick={toggleMute} disabled={status === "connecting"}>
+            {isMuted ? "Unmute" : "Mute"}
           </button>
-        ) : (
-          <div className="voice-actions">
-            {status === "speaking" && (
-              <button type="button" onClick={stopReply}>
-                Stop reply
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={toggleMute}
-              disabled={status === "connecting"}
-            >
-              {isMuted ? "Unmute" : "Mute"}
-            </button>
-            <button type="button" onClick={endVoice} className="voice-end">
-              End
-            </button>
-          </div>
-        )}
+          <button type="button" onClick={endVoice} className="voice-end">
+            End
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -767,11 +767,9 @@ export function VoiceAssistant({
         </p>
       )}
 
-      {(isActive || status === "error") && (
-        <button type="button" className="voice-fallback" onClick={onTextFallback}>
-          Type names and email addresses in the message box below
-        </button>
-      )}
+      <button type="button" className="voice-fallback" onClick={onTextFallback}>
+        Type names, email addresses, and mobile numbers in the message box below
+      </button>
     </section>
   );
 }

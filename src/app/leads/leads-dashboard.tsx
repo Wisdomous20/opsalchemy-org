@@ -12,6 +12,7 @@ interface LeadDto {
   readonly phone: string | null;
   readonly serviceInterests: readonly string[];
   readonly conversationSummary: string;
+  readonly contactAllowed: boolean;
   readonly crmSyncAllowed: boolean;
   readonly consentRecordedAt: string;
   readonly createdAt: string;
@@ -85,10 +86,10 @@ function LeadRecord({ lead, index }: { lead: LeadDto; index: number }) {
         <span className={styles.fieldLabel}>Received</span>
         <time dateTime={lead.createdAt}>{formatDate(lead.createdAt)}</time>
         <span
-          className={lead.crmSyncAllowed ? styles.consentYes : styles.consentNo}
+          className={lead.contactAllowed ? styles.consentYes : styles.consentNo}
           title={`Consent recorded ${formatDate(lead.consentRecordedAt)}`}
         >
-          {lead.crmSyncAllowed ? "CRM consent" : "No CRM consent"}
+          {lead.contactAllowed ? "Contact consent" : "No contact consent"}
         </span>
       </div>
 

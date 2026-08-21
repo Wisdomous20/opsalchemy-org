@@ -8,6 +8,9 @@ import {
   consultationEndTime,
   isAllowedConsultationStart,
 } from "@/domain/scheduling/consultation-policy";
+import type { ConversationChannel } from "@/domain/conversations/conversation";
+import type { ServiceId } from "@/domain/services/service-offering";
+import type { CaptureLead } from "./capture-lead";
 
 const MAXIMUM_ADVANCE_MS = 180 * 24 * 60 * 60 * 1_000;
 
@@ -15,6 +18,10 @@ export interface ScheduleConsultationInput {
   readonly bookingKey: string;
   readonly attendeeEmail: string;
   readonly attendeeName: string;
+  readonly attendeePhone: string;
+  readonly channel: ConversationChannel;
+  readonly contactConsent: boolean;
+  readonly serviceInterests: readonly ServiceId[];
   readonly startTime: string;
   readonly confirmed: boolean;
 }
@@ -23,16 +30,19 @@ export type ScheduleConsultationResult =
   | { readonly status: "booked"; readonly meeting: CalendarMeeting }
   | { readonly status: "conflict" }
   | { readonly status: "confirmation_required" }
+  | { readonly status: "consent_required" }
   | { readonly status: "invalid_time" };
 
 export class ScheduleConsultation {
   constructor(
     private readonly gateway: CalendarSchedulingGateway,
+    private readonly captureLead: CaptureLead,
     private readonly now: () => Date = () => new Date(),
   ) {}
 
   async execute(input: ScheduleConsultationInput): Promise<ScheduleConsultationResult> {
     if (!input.confirmed) return { status: "confirmation_required" };
+    if (!input.contactConsent) return { status: "consent_required" };
 
     const start = new Date(input.startTime);
     const endTime = consultationEndTime(input.startTime);
@@ -47,6 +57,16 @@ export class ScheduleConsultation {
     ) {
       return { status: "invalid_time" };
     }
+
+    const capture = await this.captureLead.execute({
+      name: input.attendeeName,
+      email: input.attendeeEmail,
+      phone: input.attendeePhone,
+      channel: input.channel,
+      serviceInterests: input.serviceInterests,
+      consentConfirmed: input.contactConsent,
+    });
+    if (capture.status !== "captured") return { status: "consent_required" };
 
     const existing = await this.gateway.findByBookingKey(input.bookingKey);
     if (existing) return { status: "booked", meeting: existing };

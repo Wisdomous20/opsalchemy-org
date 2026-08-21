@@ -75,6 +75,10 @@ export async function POST(request: Request): Promise<Response> {
       bookingKey,
       attendeeEmail: parsed.data.attendeeEmail,
       attendeeName: parsed.data.attendeeName,
+      attendeePhone: parsed.data.attendeePhone,
+      channel: "browser-voice",
+      contactConsent: parsed.data.contactConsent,
+      serviceInterests: [],
       startTime: parsed.data.startTime,
       confirmed: parsed.data.confirmed,
     });

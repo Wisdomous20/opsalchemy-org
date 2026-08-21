@@ -1,6 +1,7 @@
 import type { ServiceId } from "../services/service-offering";
 
 export interface LeadConsent {
+  readonly contactAllowed: boolean;
   readonly crmSyncAllowed: boolean;
   readonly recordedAt: Date;
 }
