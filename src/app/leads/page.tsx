@@ -7,8 +7,8 @@ import { LeadsDashboard } from "./leads-dashboard";
 import styles from "./leads.module.css";
 
 export const metadata: Metadata = {
-  title: "Lead Ledger",
-  description: "A working view of OPSAlchemy consultation leads.",
+  title: "Leads",
+  description: "OPSAlchemy consultation leads.",
   robots: { index: false, follow: false },
 };
 
@@ -20,33 +20,21 @@ export default function LeadsPage() {
       <header className={styles.header}>
         <div className={`shell ${styles.headerInner}`}>
           <Link href="/" aria-label="Return to OPSAlchemy home">
-            <BrandMark compact />
+            <BrandMark compact tone="dark" />
           </Link>
-          <div className={styles.environment}>
-            <span aria-hidden="true" /> Demo workspace
+          <div className={styles.headerActions}>
+            <span className={styles.environment}>Demo workspace</span>
+            <Link href="/">Back to website</Link>
           </div>
         </div>
       </header>
 
       <div className={`shell ${styles.intro}`}>
-        <div>
-          <p className="eyebrow">Relationship intelligence</p>
-          <h1>
-            Lead <em>ledger.</em>
-          </h1>
-        </div>
-        <p>
-          A living view of the people who have raised their hand, the work they need,
-          and the context behind each conversation.
-        </p>
+        <h1>Leads</h1>
+        <p>Consultation requests and conversation details.</p>
       </div>
 
       <LeadsDashboard />
-
-      <footer className={`shell ${styles.footer}`}>
-        <span>OPSAlchemy / Lead ledger</span>
-        <Link href="/">Return to the website</Link>
-      </footer>
     </main>
   );
 }

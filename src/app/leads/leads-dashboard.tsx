@@ -64,13 +64,9 @@ function LeadInterests({ interests }: { interests: readonly string[] }) {
   );
 }
 
-function LeadRecord({ lead, index }: { lead: LeadDto; index: number }) {
+function LeadRecord({ lead }: { lead: LeadDto }) {
   return (
     <article className={styles.record}>
-      <div className={styles.recordNumber} aria-hidden="true">
-        {String(index + 1).padStart(2, "0")}
-      </div>
-
       <div className={styles.contact}>
         <h2>{lead.name}</h2>
         <a href={`mailto:${lead.email}`}>{lead.email}</a>
@@ -78,12 +74,12 @@ function LeadRecord({ lead, index }: { lead: LeadDto; index: number }) {
       </div>
 
       <div className={styles.interests}>
-        <span className={styles.fieldLabel}>Interested in</span>
+        <span className={styles.mobileLabel}>Interest</span>
         <LeadInterests interests={lead.serviceInterests} />
       </div>
 
       <div className={styles.recordMeta}>
-        <span className={styles.fieldLabel}>Received</span>
+        <span className={styles.mobileLabel}>Received</span>
         <time dateTime={lead.createdAt}>{formatDate(lead.createdAt)}</time>
         <span
           className={lead.contactAllowed ? styles.consentYes : styles.consentNo}
@@ -185,10 +181,8 @@ export function LeadsDashboard() {
   return (
     <section className={`shell ${styles.workspace}`} aria-labelledby="ledger-title">
       <div className={styles.toolbar}>
-        <div>
-          <span className={styles.fieldLabel} id="ledger-title">
-            Current records
-          </span>
+        <div className={styles.toolbarHeading}>
+          <h2 id="ledger-title">All leads</h2>
           <strong>{loading ? "—" : leads.length}</strong>
         </div>
 
@@ -239,7 +233,6 @@ export function LeadsDashboard() {
 
       {!loading && !error && leads.length === 0 ? (
         <div className={styles.emptyState}>
-          <span aria-hidden="true">◇</span>
           <h2>No leads have arrived yet.</h2>
           <p>New consultation leads will appear here as soon as they are captured.</p>
         </div>
@@ -248,14 +241,12 @@ export function LeadsDashboard() {
       {!error && leads.length > 0 ? (
         <div className={styles.ledger} aria-live="polite">
           <div className={styles.ledgerHeader} aria-hidden="true">
-            <span>Record</span>
             <span>Contact</span>
             <span>Interest</span>
-            <span>Status</span>
-            <span>Context</span>
+            <span>Received</span>
           </div>
-          {visibleLeads.map((lead, index) => (
-            <LeadRecord key={lead.id} lead={lead} index={index} />
+          {visibleLeads.map((lead) => (
+            <LeadRecord key={lead.id} lead={lead} />
           ))}
           {visibleLeads.length === 0 ? (
             <div className={styles.noResults}>
